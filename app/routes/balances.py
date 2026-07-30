@@ -9,18 +9,32 @@ from app.models.notification import Notification
 balances_bp = Blueprint("balances", __name__)
 
 
+# 🚩 PLACEHOLDER for Member 2's group detail endpoint.
+# Replace with the real Group blueprint when Member 2 pushes their routes.
+@balances_bp.route("/api/groups/<int:group_id>", methods=["GET"])
+@jwt_required()
+def get_group(group_id):
+    group = Group.query.get_or_404(group_id)
+    return jsonify(group.to_dict())
+
+
 def _compute_gross_balances(group):
-    """Day 1: raw amounts — who paid what, who owes what per expense, no netting."""
-    members = group.members  # assumes Group.members relationship exists
+    members = group.members
     balances = {m.id: 0.0 for m in members}
 
     for expense in group.expenses:
-        n = len(members)
+        participants = expense.participants if expense.participants else members
+        participant_ids = {u.id for u in participants}
+        n = len(participants)
         share = expense.amount / n
+
         for member in members:
             if member.id == expense.paid_by:
-                balances[member.id] += expense.amount - share
-            else:
+                if member.id in participant_ids:
+                    balances[member.id] += expense.amount - share
+                else:
+                    balances[member.id] += expense.amount
+            elif member.id in participant_ids:
                 balances[member.id] -= share
 
     return balances
