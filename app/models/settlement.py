@@ -6,8 +6,8 @@ class Settlement(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     group_id = db.Column(db.Integer, db.ForeignKey("groups.id"), nullable=False)
-    payer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)   # who paid the debt
-    payee_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)   # who received it
+    payer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    payee_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
