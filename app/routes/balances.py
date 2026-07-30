@@ -1,9 +1,10 @@
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.extensions import db
 from app.models.group import Group
 from app.models.expense import Expense
 from app.models.settlement import Settlement
+from app.models.notification import Notification
 
 balances_bp = Blueprint("balances", __name__)
 
@@ -78,6 +79,15 @@ def get_net_balances(group_id):
     return jsonify({"balances": balances, "simplified_transactions": simplified})
 
 
+@balances_bp.route("/api/groups/<int:group_id>/activity", methods=["GET"])
+@jwt_required()
+def get_activity(group_id):
+    group = Group.query.get_or_404(group_id)
+    expenses = [{"type": "expense", **e.to_dict()} for e in group.expenses]
+    settlements = [{"type": "settlement", **s.to_dict()} for s in group.settlements]
+    activity = sorted(expenses + settlements, key=lambda x: x["created_at"], reverse=True)
+    return jsonify(activity)
+
 @balances_bp.route("/api/groups/<int:group_id>/settlements", methods=["POST"])
 @jwt_required()
 def record_settlement(group_id):
@@ -88,18 +98,64 @@ def record_settlement(group_id):
 
     if not all([payer_id, payee_id, amount]) or amount <= 0:
         return jsonify({"error": "payer_id, payee_id, and a positive amount are required"}), 400
+    if payer_id == payee_id:
+        return jsonify({"error": "payer and payee must be different"}), 400
+
+    group = Group.query.get_or_404(group_id)
+    member_ids = {m.id for m in group.members}
+    if payer_id not in member_ids or payee_id not in member_ids:
+        return jsonify({"error": "both users must be members of the group"}), 400
 
     settlement = Settlement(group_id=group_id, payer_id=payer_id, payee_id=payee_id, amount=amount)
     db.session.add(settlement)
+    for member in group.members:
+        if member.id != payer_id:
+            db.session.add(Notification(
+                user_id=member.id,
+                group_id=group.id,
+                message=f"A settlement of {amount} was recorded in {group.name}",
+            ))
     db.session.commit()
     return jsonify(settlement.to_dict()), 201
 
 
-@balances_bp.route("/api/groups/<int:group_id>/activity", methods=["GET"])
+@balances_bp.route("/api/notifications", methods=["GET"])
 @jwt_required()
-def get_activity(group_id):
+def get_notifications():
+    user_id = int(get_jwt_identity())
+    notes = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
+    return jsonify([n.to_dict() for n in notes])
+
+
+@balances_bp.route("/api/notifications/<int:notification_id>/read", methods=["PATCH"])
+@jwt_required()
+def mark_notification_read(notification_id):
+    user_id = int(get_jwt_identity())
+    note = Notification.query.get_or_404(notification_id)
+    if note.user_id != user_id:
+        return jsonify({"error": "you can only mark your own notifications as read"}), 403
+    note.is_read = True
+    db.session.commit()
+    return jsonify(note.to_dict())
+
+@balances_bp.route("/api/groups/<int:group_id>/summary", methods=["GET"])
+@jwt_required()
+def get_summary(group_id):
     group = Group.query.get_or_404(group_id)
-    expenses = [{"type": "expense", **e.to_dict()} for e in group.expenses]
-    settlements = [{"type": "settlement", **s.to_dict()} for s in group.settlements]
-    activity = sorted(expenses + settlements, key=lambda x: x["created_at"], reverse=True)
-    return jsonify(activity)
+    expenses = group.expenses
+
+    total_spent = sum(e.amount for e in expenses)
+    per_person = total_spent / len(group.members) if group.members else 0
+
+    spend_by_payer = {}
+    for e in expenses:
+        spend_by_payer[e.paid_by] = spend_by_payer.get(e.paid_by, 0) + e.amount
+    top_spender = max(spend_by_payer, key=spend_by_payer.get) if spend_by_payer else None
+
+    return jsonify({
+        "total_spent": round(total_spent, 2),
+        "average_per_person": round(per_person, 2),
+        "spend_by_payer": {uid: round(amt, 2) for uid, amt in spend_by_payer.items()},
+        "top_spender_id": top_spender,
+        "expense_count": len(expenses),
+    })
