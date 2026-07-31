@@ -161,7 +161,11 @@ def get_summary(group_id):
     members = list(group.members)
 
     total_spent = sum(float(e.amount) for e in expenses)
-    per_person = total_spent / len(members) if members else 0
+    # Participants are the users with shares on each expense (mirrors the
+    # participant-based balance math); members who never took part in any
+    # expense must not dilute the average.
+    participant_ids = {s.user_id for e in expenses for s in e.shares}
+    per_person = total_spent / len(participant_ids) if participant_ids else 0
 
     spend_by_payer = {}
     for e in expenses:

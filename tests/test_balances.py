@@ -7,6 +7,10 @@ from app.models.settlement import Settlement
 from app.routes.balances import _compute_gross_balances, _apply_settlements, _simplify_debts
 
 
+def auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
 def _make_user(name, email):
     user = User(name=name, email=email, password_hash="x")
     db.session.add(user)
@@ -142,3 +146,74 @@ def test_participant_split_fallback_to_all_members(sample_group):
     assert round(balances[u1.id], 2) == 60.0
     assert round(balances[u2.id], 2) == -30.0
     assert round(balances[u3.id], 2) == -30.0
+
+
+def test_summary_average_uses_participants_not_all_members(client, group_with_members):
+    """A group of 3 where only 2 participated must average over the 2."""
+    g = group_with_members
+    resp = client.post(
+        f"/api/groups/{g['group_id']}/expenses",
+        json={
+            "description": "Team Dinner",
+            "amount": "90.00",
+            "split_type": "equal",
+            "paid_by": g["alice"],
+            "participants": [{"user_id": g["alice"]}, {"user_id": g["bob"]}],
+        },
+        headers=auth_headers(g["alice_token"]),
+    )
+    assert resp.status_code == 201
+
+    summary = client.get(
+        f"/api/groups/{g['group_id']}/summary",
+        headers=auth_headers(g["alice_token"]),
+    ).get_json()
+
+    assert summary["total_spent"] == 90.0
+    # Carol is a member but took no part: average over Alice + Bob, not 3.
+    assert summary["average_per_person"] == 45.0
+    assert summary["expense_count"] == 1
+
+
+def test_summary_average_union_of_participants_across_expenses(client, group_with_members):
+    """Distinct participants across expenses drive the average (like the
+    shares-based balance math): 90 over {A,B} + 60 over {A,C} = 150 / 3."""
+    g = group_with_members
+    for amount, participants in (
+        ("90.00", [g["alice"], g["bob"]]),
+        ("60.00", [g["alice"], g["carol"]]),
+    ):
+        resp = client.post(
+            f"/api/groups/{g['group_id']}/expenses",
+            json={
+                "description": "Expense",
+                "amount": amount,
+                "split_type": "equal",
+                "paid_by": g["alice"],
+                "participants": [{"user_id": uid} for uid in participants],
+            },
+            headers=auth_headers(g["alice_token"]),
+        )
+        assert resp.status_code == 201
+
+    summary = client.get(
+        f"/api/groups/{g['group_id']}/summary",
+        headers=auth_headers(g["alice_token"]),
+    ).get_json()
+
+    assert summary["total_spent"] == 150.0
+    assert summary["average_per_person"] == 50.0
+    assert summary["expense_count"] == 2
+
+
+def test_summary_empty_group_has_zero_average(client, group_with_members):
+    g = group_with_members
+    summary = client.get(
+        f"/api/groups/{g['group_id']}/summary",
+        headers=auth_headers(g["alice_token"]),
+    ).get_json()
+
+    assert summary["total_spent"] == 0.0
+    assert summary["average_per_person"] == 0.0
+    assert summary["expense_count"] == 0
+    assert summary["top_spender_id"] is None
