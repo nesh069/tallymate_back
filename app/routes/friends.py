@@ -47,7 +47,12 @@ def accept_friend(request_id):
         return jsonify(error="Friend request has already been accepted."), 409
     contact.status = "accepted"
     db.session.commit()
-    return jsonify(message="Friend request accepted.", friend=contact.user.to_dict())
+    friend_data = {
+        **contact.user.to_dict(),
+        "id": contact.id,
+        "status": "accepted",
+    }
+    return jsonify(message="Friend request accepted.", friend=friend_data)
 
 
 @friends_bp.get("")
@@ -57,6 +62,40 @@ def list_friends():
     contacts = db.session.scalars(select(FriendContact).where(FriendContact.status == "accepted", or_(FriendContact.user_id == user_id, FriendContact.friend_id == user_id)).order_by(FriendContact.created_at.desc())).all()
     friends = [contact.friend if contact.user_id == user_id else contact.user for contact in contacts]
     return jsonify(friends=[friend.to_dict() for friend in friends])
+
+
+@friends_bp.get("/pending")
+@jwt_required()
+def list_pending():
+    user_id = current_user_id()
+    contacts = db.session.scalars(
+        select(FriendContact)
+        .where(FriendContact.status == "pending", FriendContact.friend_id == user_id)
+        .order_by(FriendContact.created_at.desc())
+    ).all()
+    requests = [
+    {
+        **contact.user.to_dict(),
+        "id": contact.id,          # <-- now this overrides user's id correctly
+        "status": contact.status,
+        "created_at": contact.created_at.isoformat(),
+    }
+    for contact in contacts
+    ]
+    return jsonify(friends=requests)
+
+
+@friends_bp.delete("/pending/<int:request_id>")
+@jwt_required()
+def decline_friend(request_id):
+    user_id = current_user_id()
+    contact = db.session.get(FriendContact, request_id)
+    if not contact or contact.status != "pending" or contact.friend_id != user_id:
+        return jsonify(error="Pending friend request not found."), 404
+    db.session.delete(contact)
+    db.session.commit()
+    return "", 204
+
 
 
 @friends_bp.delete("/<int:friend_id>")
@@ -80,3 +119,5 @@ def search_users():
         select(User).where(User.email.ilike(f"%{q}%")).limit(10)
     ).all()
     return jsonify(users=[u.to_dict() for u in users])
+
+
