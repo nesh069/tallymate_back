@@ -266,3 +266,91 @@ def test_remove_member_not_in_group(client):
         headers=auth_header(token),
     )
     assert response.status_code == 404
+
+# Delete Group
+ 
+def test_delete_group_requires_auth(client):
+    response = client.delete("/groups/1")
+    assert response.status_code == 401
+
+
+def test_delete_group_only_owner_can_delete(client):
+    token_owner = get_token(client)
+    group = create_group(client, token_owner).get_json()["group"]
+
+    token_bob = signup(client, name="Bob", email="bob@example.com").get_json()["access_token"]
+    bob = client.get("/auth/me", headers=auth_header(token_bob)).get_json()["user"]
+    client.post(
+        f"/groups/{group['id']}/members",
+        json={"user_id": bob["id"]},
+        headers=auth_header(token_owner),
+    )
+
+    response = client.delete(f"/groups/{group['id']}", headers=auth_header(token_bob))
+    assert response.status_code == 403
+
+
+def test_delete_group_success(client):
+    token = get_token(client)
+    group = create_group(client, token).get_json()["group"]
+
+    response = client.delete(f"/groups/{group['id']}", headers=auth_header(token))
+    assert response.status_code == 200
+    assert response.get_json()["message"] == "Group deleted."
+
+    # Verify it's gone
+    response = client.get(f"/groups/{group['id']}", headers=auth_header(token))
+    assert response.status_code == 404
+
+
+def test_delete_group_not_found(client):
+    token = get_token(client)
+    response = client.delete("/groups/999", headers=auth_header(token))
+    assert response.status_code == 404
+
+
+# Leave Group
+ 
+def test_leave_group_requires_auth(client):
+    response = client.delete("/groups/1/leave")
+    assert response.status_code == 401
+
+
+def test_leave_group_owner_cannot_leave(client):
+    token = get_token(client)
+    group = create_group(client, token).get_json()["group"]
+
+    response = client.delete(f"/groups/{group['id']}/leave", headers=auth_header(token))
+    assert response.status_code == 400
+
+
+def test_leave_group_success(client):
+    token_owner = get_token(client)
+    group = create_group(client, token_owner).get_json()["group"]
+
+    token_bob = signup(client, name="Bob", email="bob@example.com").get_json()["access_token"]
+    bob = client.get("/auth/me", headers=auth_header(token_bob)).get_json()["user"]
+    client.post(
+        f"/groups/{group['id']}/members",
+        json={"user_id": bob["id"]},
+        headers=auth_header(token_owner),
+    )
+
+    response = client.delete(f"/groups/{group['id']}/leave", headers=auth_header(token_bob))
+    assert response.status_code == 200
+    assert response.get_json()["message"] == "You have left the group."
+
+    # Verify Bob is no longer in the group
+    response = client.get(f"/groups/{group['id']}", headers=auth_header(token_owner))
+    member_ids = [m["id"] for m in response.get_json()["group"]["members"]]
+    assert bob["id"] not in member_ids
+
+
+def test_leave_group_not_member(client):
+    token = get_token(client)
+    group = create_group(client, token).get_json()["group"]
+
+    token_bob = signup(client, name="Bob", email="bob@example.com").get_json()["access_token"]
+
+    response = client.delete(f"/groups/{group['id']}/leave", headers=auth_header(token_bob))
+    assert response.status_code == 404

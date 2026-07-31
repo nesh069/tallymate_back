@@ -69,3 +69,14 @@ def remove_friend(friend_id):
     db.session.delete(contact)
     db.session.commit()
     return "", 204
+
+@friends_bp.get("/search")
+@jwt_required()
+def search_users():
+    q = request.args.get("q", "").strip().lower()
+    if not q:
+        return jsonify(users=[])
+    users = db.session.scalars(
+        select(User).where(User.email.ilike(f"%{q}%")).limit(10)
+    ).all()
+    return jsonify(users=[u.to_dict() for u in users])
