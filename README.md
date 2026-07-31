@@ -1,4 +1,79 @@
 ## README
+
+# TallyMate Accounts & Friends API
+
+Flask backend for account authentication and user friendships. It uses SQLAlchemy, JWT access tokens, and `bcrypt` password hashing.
+
+## Run locally
+
+Create a virtual environment, install dependencies, and set a real secret before starting the service:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+export JWT_SECRET_KEY='replace-with-a-long-random-secret'
+flask --app app run
+```
+
+`DATABASE_URL` is optional and defaults to `sqlite:///tallymate.db`. For PostgreSQL, set it to a SQLAlchemy PostgreSQL URL. The app factory is `app.create_app`.
+
+## API contract
+
+All request bodies are JSON. Protected endpoints require `Authorization: Bearer <access_token>`. Timestamps are ISO 8601 strings. Errors use `{ "error": "..." }`.
+
+### Authentication
+
+| Method | Path | Auth | Request body | Success response |
+| --- | --- | --- | --- | --- |
+| POST | `/auth/signup` | No | `{ "name": "Ada", "email": "ada@example.com", "password": "password123" }` | `201 { "user": User, "access_token": "..." }` |
+| POST | `/auth/login` | No | `{ "email": "ada@example.com", "password": "password123" }` | `200 { "user": User, "access_token": "...", "refresh_token": "..." }` |
+| GET | `/auth/me` | Yes | none | `200 { "user": User }` |
+
+`User` has this shape:
+
+```json
+{
+  "id": 1,
+  "name": "Ada",
+  "email": "ada@example.com",
+  "created_at": "2026-07-30T10:15:00+00:00"
+}
+```
+
+Signup rejects invalid input with `400` and duplicate emails with `409`. Login returns `401` for an unknown email or bad password. A missing or invalid JWT on protected routes returns `401`.
+
+### Friends
+
+| Method | Path | Auth | Request body | Success response |
+| --- | --- | --- | --- | --- |
+| POST | `/friends/add` | Yes | `{ "email": "grace@example.com" }` | `201 { "message": "Friend request sent.", "friend_request": FriendRequest }` |
+| POST | `/friends/accept/<request_id>` | Yes | none | `200 { "message": "Friend request accepted.", "friend": User }` |
+| GET | `/friends` | Yes | none | `200 { "friends": [User] }` |
+| DELETE | `/friends/<friend_user_id>` | Yes | none | `204` with no body |
+
+`FriendRequest` is directional: `user_id` sent the request and `friend_id` received it. Its status is either `pending` or `accepted`.
+
+```json
+{
+  "id": 7,
+  "user_id": 1,
+  "friend_id": 2,
+  "status": "pending",
+  "created_at": "2026-07-30T10:20:00+00:00"
+}
+```
+
+Only the recipient can accept a pending request. Sending a request to yourself is `400`; a nonexistent email or request is `404`; a duplicate/reversed request or repeat acceptance is `409`; accepting someone else's request is `403`. Removing a friend uses the other user's id and returns `404` unless an accepted friendship exists.
+
+## Tests
+
+```bash
+pytest
+```
+
+The suite covers each endpoint's main success path plus invalid credentials, duplicate emails/requests, authorization failures, invalid friend operations, acceptance ownership, and removal failures.
+
 # TallyMate Backend
 
 Flask REST API for TallyMate. This section documents the **Expenses** feature (Member 3).
