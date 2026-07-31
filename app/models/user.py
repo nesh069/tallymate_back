@@ -15,6 +15,7 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(255), nullable=False, unique=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    currency = db.Column(db.String(3), nullable=False, default="USD")
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     sent_friend_requests = db.relationship("FriendContact", foreign_keys="FriendContact.user_id", back_populates="user", cascade="all, delete-orphan")
@@ -27,4 +28,4 @@ class User(db.Model):
         return bcrypt.checkpw(password.encode("utf-8"), self.password_hash.encode("utf-8"))
 
     def to_dict(self):
-        return {"id": self.id, "name": self.name, "email": self.email, "created_at": self.created_at.isoformat()}
+        return {"id": self.id, "name": self.name, "email": self.email, "currency": self.currency, "created_at": self.created_at.isoformat()}

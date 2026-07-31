@@ -103,3 +103,45 @@ def me():
     if not user:
         return jsonify(error="User no longer exists."), 404
     return jsonify(user=user.to_dict())
+
+
+@auth_bp.patch("/me")
+@jwt_required()
+def update_me():
+    """Update current user
+    ---
+    tags: [Auth]
+    summary: Update profile fields (e.g. currency)
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              currency: {type: string, enum: [USD, KSH], example: KSH}
+    responses:
+      200:
+        description: Updated user
+      400: {description: Invalid currency}
+      404: {description: User no longer exists}
+    """
+    user = db.session.get(User, int(get_jwt_identity()))
+    if not user:
+        return jsonify(error="User no longer exists."), 404
+
+    data = json_body()
+    if data is None:
+        return jsonify(error="Request body must be a JSON object."), 400
+
+    currency = data.get("currency")
+    if currency is not None:
+        currency = str(currency).upper()
+        if currency not in ("USD", "KSH"):
+            return jsonify(error="currency must be 'USD' or 'KSH'."), 400
+        user.currency = currency
+
+    db.session.commit()
+    return jsonify(user=user.to_dict())

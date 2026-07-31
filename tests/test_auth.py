@@ -41,3 +41,26 @@ def test_me_requires_token_and_returns_user(client):
     response = client.get("/auth/me", headers=auth_header(token))
     assert response.status_code == 200
     assert response.get_json()["user"]["name"] == "Ada"
+
+
+def test_signup_defaults_currency_to_usd(client):
+    data = signup(client).get_json()
+    assert data["user"]["currency"] == "USD"
+
+
+def test_update_currency(client):
+    token = signup(client).get_json()["access_token"]
+    response = client.patch("/auth/me", json={"currency": "KSH"}, headers=auth_header(token))
+    assert response.status_code == 200
+    assert response.get_json()["user"]["currency"] == "KSH"
+    assert client.get("/auth/me", headers=auth_header(token)).get_json()["user"]["currency"] == "KSH"
+
+
+def test_update_currency_rejects_invalid_values(client):
+    token = signup(client).get_json()["access_token"]
+    assert client.patch("/auth/me", json={"currency": "EUR"}, headers=auth_header(token)).status_code == 400
+    assert client.patch("/auth/me", json={"currency": "ksh"}, headers=auth_header(token)).status_code == 200
+
+
+def test_update_me_requires_token(client):
+    assert client.patch("/auth/me", json={"currency": "KSH"}).status_code == 401

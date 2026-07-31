@@ -75,5 +75,15 @@ def create_app(config_object=Config):
 
     with app.app_context():
         db.create_all()
+        # No migrations yet: create_all() won't add columns to existing
+        # tables, so sync new columns defensively (no-op on fresh DBs).
+        try:
+            db.session.execute(db.text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                "currency VARCHAR(3) DEFAULT 'USD' NOT NULL"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     return app
