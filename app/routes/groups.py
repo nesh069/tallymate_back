@@ -4,6 +4,8 @@ from sqlalchemy import select
 
 from app.extensions import db
 from app.models.group import Group
+from app.models.notification import Notification
+from app.models.settlement import Settlement
 from app.models.user import User
 
 groups_bp = Blueprint("groups", __name__, url_prefix="/groups")
@@ -159,6 +161,10 @@ def delete_group(group_id):
     if group.created_by != user.id:
         return jsonify(error="Only the group owner can delete the group."), 403
 
+    # Notifications and settlements are referenced by plain FKs (no ORM
+    # cascade), so they must be removed explicitly; expenses cascade.
+    Notification.query.filter_by(group_id=group.id).delete()
+    Settlement.query.filter_by(group_id=group.id).delete()
     db.session.delete(group)
     db.session.commit()
 

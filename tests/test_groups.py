@@ -354,3 +354,41 @@ def test_leave_group_not_member(client):
 
     response = client.delete(f"/groups/{group['id']}/leave", headers=auth_header(token_bob))
     assert response.status_code == 404
+
+def test_delete_group_with_settlements_and_notifications(client):
+    """Deleting a group that has settlements/notifications must not 500."""
+    token_owner = get_token(client)
+    group = create_group(client, token_owner).get_json()["group"]
+    gid = group["id"]
+
+    token_bob = signup(client, name="Bob", email="bob@settlement-delete.test").get_json()["access_token"]
+    bob = client.get("/auth/me", headers=auth_header(token_bob)).get_json()["user"]
+
+    client.post(
+        f"/groups/{gid}/members",
+        json={"user_id": bob["id"]},
+        headers=auth_header(token_owner),
+    )
+    expense = client.post(
+        f"/api/groups/{gid}/expenses",
+        json={
+            "description": "Dinner",
+            "amount": "90.00",
+            "split_type": "equal",
+            "paid_by": group["created_by"],
+            "participants": [{"user_id": bob["id"]}],
+        },
+        headers=auth_header(token_owner),
+    )
+    assert expense.status_code == 201
+
+    settlement = client.post(
+        f"/api/groups/{gid}/settlements",
+        json={"payer_id": bob["id"], "payee_id": group["created_by"], "amount": 45.0},
+        headers=auth_header(token_bob),
+    )
+    assert settlement.status_code == 201
+
+    response = client.delete(f"/groups/{gid}", headers=auth_header(token_owner))
+    assert response.status_code == 200
+    assert response.get_json()["message"] == "Group deleted."
