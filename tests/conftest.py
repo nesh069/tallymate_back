@@ -1,21 +1,24 @@
 import pytest
 from flask_jwt_extended import create_access_token
 from app import create_app
+from app.config import TestConfig
 from app.extensions import db
 
 
-@pytest.fixture
+@pytest.fixture()
 def app():
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    with app.app_context():
-        db.create_all()
-        yield app
-        db.drop_all()
+    application = create_app(TestConfig)
+    ctx = application.app_context()
+    ctx.push()
+    db.drop_all()
+    db.create_all()
+    yield application
+    db.session.remove()
+    db.drop_all()
+    ctx.pop()
 
 
-@pytest.fixture
+@pytest.fixture()
 def client(app):
     return app.test_client()
 
