@@ -5,6 +5,7 @@ venv/
 .venv/
 env/
 *.sqlite3
+*.db
 instance/
 .pytest_cache/
 .DS_Store

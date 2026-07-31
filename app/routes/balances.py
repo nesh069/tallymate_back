@@ -9,33 +9,22 @@ from app.models.notification import Notification
 balances_bp = Blueprint("balances", __name__)
 
 
-# 🚩 PLACEHOLDER for Member 2's group detail endpoint.
-# Replace with the real Group blueprint when Member 2 pushes their routes.
-@balances_bp.route("/api/groups/<int:group_id>", methods=["GET"])
-@jwt_required()
-def get_group(group_id):
-    group = Group.query.get_or_404(group_id)
-    return jsonify(group.to_dict())
-
-
 def _compute_gross_balances(group):
-    members = group.members
+    members = list(group.members)
     balances = {m.id: 0.0 for m in members}
 
     for expense in group.expenses:
-        participants = expense.participants if expense.participants else members
-        participant_ids = {u.id for u in participants}
-        n = len(participants)
-        share = expense.amount / n
+        amount = float(expense.amount)
+        if expense.shares:
+            share_by_user = {s.user_id: float(s.amount) for s in expense.shares}
+        else:
+            share_by_user = {m.id: amount / len(members) for m in members}
 
-        for member in members:
-            if member.id == expense.paid_by:
-                if member.id in participant_ids:
-                    balances[member.id] += expense.amount - share
-                else:
-                    balances[member.id] += expense.amount
-            elif member.id in participant_ids:
-                balances[member.id] -= share
+        payer_share = share_by_user.get(expense.paid_by, 0.0)
+        balances[expense.paid_by] += amount - payer_share
+        for user_id, share in share_by_user.items():
+            if user_id != expense.paid_by:
+                balances[user_id] -= share
 
     return balances
 
@@ -97,10 +86,21 @@ def get_net_balances(group_id):
 @jwt_required()
 def get_activity(group_id):
     group = Group.query.get_or_404(group_id)
-    expenses = [{"type": "expense", **e.to_dict()} for e in group.expenses]
-    settlements = [{"type": "settlement", **s.to_dict()} for s in group.settlements]
-    activity = sorted(expenses + settlements, key=lambda x: x["created_at"], reverse=True)
+    expenses = [
+        {"type": "expense", "timestamp": e.date, **e.to_dict()}
+        for e in group.expenses
+    ]
+    settlements = [
+        {"type": "settlement", "timestamp": s.created_at, **s.to_dict()}
+        for s in group.settlements
+    ]
+    activity = sorted(
+        expenses + settlements,
+        key=lambda x: x["timestamp"],
+        reverse=True,
+    )
     return jsonify(activity)
+
 
 @balances_bp.route("/api/groups/<int:group_id>/settlements", methods=["POST"])
 @jwt_required()
@@ -152,18 +152,20 @@ def mark_notification_read(notification_id):
     db.session.commit()
     return jsonify(note.to_dict())
 
+
 @balances_bp.route("/api/groups/<int:group_id>/summary", methods=["GET"])
 @jwt_required()
 def get_summary(group_id):
     group = Group.query.get_or_404(group_id)
     expenses = group.expenses
+    members = list(group.members)
 
-    total_spent = sum(e.amount for e in expenses)
-    per_person = total_spent / len(group.members) if group.members else 0
+    total_spent = sum(float(e.amount) for e in expenses)
+    per_person = total_spent / len(members) if members else 0
 
     spend_by_payer = {}
     for e in expenses:
-        spend_by_payer[e.paid_by] = spend_by_payer.get(e.paid_by, 0) + e.amount
+        spend_by_payer[e.paid_by] = spend_by_payer.get(e.paid_by, 0) + float(e.amount)
     top_spender = max(spend_by_payer, key=spend_by_payer.get) if spend_by_payer else None
 
     return jsonify({
