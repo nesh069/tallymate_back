@@ -1,7 +1,26 @@
 from flask import Flask, jsonify
+from flasgger import Swagger
 
 from app.config import Config
 from app.extensions import db, jwt, migrate, cors
+
+SWAGGER_TEMPLATE = {
+    "openapi": "3.0.3",
+    "info": {
+        "title": "TallyMate API",
+        "description": (
+            "REST API for TallyMate — group expenses, balances, settlements, "
+            "friends, and notifications. All protected endpoints require an "
+            "`Authorization: Bearer <access_token>` header."
+        ),
+        "version": "1.0.0",
+    },
+    "components": {
+        "securitySchemes": {
+            "BearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+        }
+    },
+}
 
 
 def create_app(config_object=Config):
@@ -34,8 +53,24 @@ def create_app(config_object=Config):
     app.register_blueprint(expenses_bp)
     app.register_blueprint(balances_bp)
 
+    swagger = Swagger(app, template=SWAGGER_TEMPLATE)
+
     @app.get("/health")
     def health():
+        """Health check
+        ---
+        tags: [Meta]
+        summary: Liveness probe
+        responses:
+          200:
+            description: Service is healthy
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    status: {type: string, example: ok}
+        """
         return jsonify(status="ok")
 
     with app.app_context():

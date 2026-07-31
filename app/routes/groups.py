@@ -25,6 +25,26 @@ def current_user():
 @groups_bp.post("")
 @jwt_required()
 def create_group():
+    """Create a group
+    ---
+    tags: [Groups]
+    summary: Create a new group owned by the current user
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: {type: string, example: Dinner Club}
+    responses:
+      201:
+        description: Created group
+      400: {description: Group name is required}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -50,6 +70,16 @@ def create_group():
 @groups_bp.get("")
 @jwt_required()
 def list_groups():
+    """List my groups
+    ---
+    tags: [Groups]
+    summary: List groups the current user belongs to
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: List of groups
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -63,6 +93,23 @@ def list_groups():
 @groups_bp.get("/<int:group_id>")
 @jwt_required()
 def get_group(group_id):
+    """Get group detail
+    ---
+    tags: [Groups]
+    summary: Get a group the current user is a member of
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Group with members
+      403: {description: Not a member}
+      404: {description: Group not found}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -82,6 +129,34 @@ def get_group(group_id):
 @groups_bp.post("/<int:group_id>/members")
 @jwt_required()
 def add_member(group_id):
+    """Add a member
+    ---
+    tags: [Groups]
+    summary: Add a user to the group (owner only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [user_id]
+            properties:
+              user_id: {type: integer}
+    responses:
+      200:
+        description: Group with the new member
+      400: {description: Invalid user_id}
+      403: {description: Not the group owner}
+      404: {description: Group or user not found}
+      409: {description: Already a member}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -119,6 +194,27 @@ def add_member(group_id):
 @groups_bp.delete("/<int:group_id>/members/<int:user_id>")
 @jwt_required()
 def remove_member(group_id, user_id):
+    """Remove a member
+    ---
+    tags: [Groups]
+    summary: Remove a user from the group (owner only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+      - name: user_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Group without the removed member
+      403: {description: Not the group owner}
+      404: {description: Group or member not found}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -150,6 +246,23 @@ def remove_member(group_id, user_id):
 @groups_bp.delete("/<int:group_id>")
 @jwt_required()
 def delete_group(group_id):
+    """Delete a group
+    ---
+    tags: [Groups]
+    summary: Delete a group and its data (owner only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Group deleted
+      403: {description: Not the group owner}
+      404: {description: Group not found}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404
@@ -176,6 +289,23 @@ def delete_group(group_id):
 @groups_bp.delete("/<int:group_id>/leave")
 @jwt_required()
 def leave_group(group_id):
+    """Leave a group
+    ---
+    tags: [Groups]
+    summary: Remove the current user from a group they do not own
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Left the group
+      400: {description: Owner cannot leave}
+      404: {description: Group not found or not a member}
+    """
     user = current_user()
     if not user:
         return jsonify(error="User not found."), 404

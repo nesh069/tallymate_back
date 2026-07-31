@@ -59,6 +59,46 @@ def _build_shares(expense, split_type, amount, participants, group):
 @expenses_bp.route("/groups/<int:group_id>/expenses", methods=["POST"])
 @jwt_required()
 def add_expense(group_id):
+    """Add an expense
+    ---
+    tags: [Expenses]
+    summary: Record an expense split across participants
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount, split_type, participants]
+            properties:
+              amount: {type: string, example: "90.00"}
+              description: {type: string, example: Dinner}
+              split_type:
+                type: string
+                enum: [equal, unequal, percentage]
+              paid_by: {type: integer}
+              participants:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    user_id: {type: integer}
+                    amount: {type: number}
+                    percentage: {type: number}
+    responses:
+      201:
+        description: Created expense with computed shares
+      400: {description: Invalid request or split error}
+      403: {description: Not a member of the group}
+      404: {description: Group not found}
+    """
     group, error = _get_group_or_404(group_id)
     if error:
         return error
@@ -99,6 +139,22 @@ def add_expense(group_id):
 @expenses_bp.route("/groups/<int:group_id>/expenses", methods=["GET"])
 @jwt_required()
 def list_expenses(group_id):
+    """List group expenses
+    ---
+    tags: [Expenses]
+    summary: List a group's expenses, newest first
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: List of expenses
+      403: {description: Not a member of the group}
+    """
     group, error = _get_group_or_404(group_id)
     if error:
         return error
@@ -116,6 +172,23 @@ def list_expenses(group_id):
 @expenses_bp.route("/expenses/<int:expense_id>", methods=["GET"])
 @jwt_required()
 def get_expense(expense_id):
+    """Get an expense
+    ---
+    tags: [Expenses]
+    summary: Fetch a single expense by id
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: expense_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: The expense
+      403: {description: Not a member of the group}
+      404: {description: Expense not found}
+    """
     expense = db.session.get(Expense, expense_id)
     if expense is None:
         return jsonify({"error": "Expense not found."}), 404
@@ -130,6 +203,46 @@ def get_expense(expense_id):
 @expenses_bp.route("/expenses/<int:expense_id>", methods=["PUT"])
 @jwt_required()
 def update_expense(expense_id):
+    """Update an expense
+    ---
+    tags: [Expenses]
+    summary: Edit an expense (payer only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: expense_id
+        in: path
+        required: true
+        schema: {type: integer}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [amount, split_type, participants]
+            properties:
+              amount: {type: string, example: "90.00"}
+              description: {type: string}
+              split_type:
+                type: string
+                enum: [equal, unequal, percentage]
+              paid_by: {type: integer}
+              participants:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    user_id: {type: integer}
+                    amount: {type: number}
+                    percentage: {type: number}
+    responses:
+      200:
+        description: Updated expense
+      400: {description: Invalid request}
+      403: {description: Not the payer}
+      404: {description: Expense not found}
+    """
     expense = db.session.get(Expense, expense_id)
     if expense is None:
         return jsonify({"error": "Expense not found."}), 404
@@ -166,8 +279,22 @@ def update_expense(expense_id):
 @expenses_bp.route("/groups/<int:group_id>/members", methods=["GET"])
 @jwt_required()
 def list_group_members(group_id):
-    """Read-only helper for the expense split UI (who paid / who owes).
-    Temporary home pending Member 2's Groups feature absorbing this into groups.py."""
+    """List group members (split UI helper)
+    ---
+    tags: [Groups]
+    summary: Minimal member list for the expense split UI
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Members with id, name, email
+      403: {description: Not a member of the group}
+    """
     group, error = _get_group_or_404(group_id)
     if error:
         return error
@@ -183,6 +310,22 @@ def list_group_members(group_id):
 @expenses_bp.route("/expenses/<int:expense_id>", methods=["DELETE"])
 @jwt_required()
 def delete_expense(expense_id):
+    """Delete an expense
+    ---
+    tags: [Expenses]
+    summary: Delete an expense (payer only)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: expense_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      204: {description: Deleted}
+      403: {description: Not the payer}
+      404: {description: Expense not found}
+    """
     expense = db.session.get(Expense, expense_id)
     if expense is None:
         return jsonify({"error": "Expense not found."}), 404

@@ -66,6 +66,21 @@ def _simplify_debts(balances):
 @balances_bp.route("/api/groups/<int:group_id>/balances", methods=["GET"])
 @jwt_required()
 def get_gross_balances(group_id):
+    """Get group balances
+    ---
+    tags: [Balances]
+    summary: Per-user balances after expenses and settlements
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Map of user_id to balance (positive = owed)
+    """
     group = Group.query.get_or_404(group_id)
     balances = _compute_gross_balances(group)
     balances = _apply_settlements(group, balances)
@@ -75,6 +90,21 @@ def get_gross_balances(group_id):
 @balances_bp.route("/api/groups/<int:group_id>/balances/net", methods=["GET"])
 @jwt_required()
 def get_net_balances(group_id):
+    """Get net balances and payment plan
+    ---
+    tags: [Balances]
+    summary: Balances plus minimal simplified transactions
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Balances and simplified_transactions
+    """
     group = Group.query.get_or_404(group_id)
     balances = _compute_gross_balances(group)
     balances = _apply_settlements(group, balances)
@@ -85,6 +115,21 @@ def get_net_balances(group_id):
 @balances_bp.route("/api/groups/<int:group_id>/activity", methods=["GET"])
 @jwt_required()
 def get_activity(group_id):
+    """Get group activity feed
+    ---
+    tags: [Balances]
+    summary: Chronological expense and settlement feed, newest first
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: List of expense and settlement entries
+    """
     group = Group.query.get_or_404(group_id)
     expenses = [
         {"type": "expense", "timestamp": e.date, **e.to_dict()}
@@ -105,6 +150,33 @@ def get_activity(group_id):
 @balances_bp.route("/api/groups/<int:group_id>/settlements", methods=["POST"])
 @jwt_required()
 def record_settlement(group_id):
+    """Record a settlement
+    ---
+    tags: [Balances]
+    summary: Record a payment between two members; notifies everyone except the payer
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [payer_id, payee_id, amount]
+            properties:
+              payer_id: {type: integer}
+              payee_id: {type: integer}
+              amount: {type: number, example: 30}
+    responses:
+      201:
+        description: Created settlement
+      400: {description: Invalid payload, equal ids, or non-members}
+    """
     data = request.get_json()
     payer_id = data.get("payer_id")
     payee_id = data.get("payee_id")
@@ -136,6 +208,16 @@ def record_settlement(group_id):
 @balances_bp.route("/api/notifications", methods=["GET"])
 @jwt_required()
 def get_notifications():
+    """List my notifications
+    ---
+    tags: [Balances]
+    summary: Current user's notifications, newest first
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: List of notifications
+    """
     user_id = int(get_jwt_identity())
     notes = Notification.query.filter_by(user_id=user_id).order_by(Notification.created_at.desc()).all()
     return jsonify([n.to_dict() for n in notes])
@@ -144,6 +226,23 @@ def get_notifications():
 @balances_bp.route("/api/notifications/<int:notification_id>/read", methods=["PATCH"])
 @jwt_required()
 def mark_notification_read(notification_id):
+    """Mark a notification read
+    ---
+    tags: [Balances]
+    summary: Mark one of the current user's notifications as read
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: notification_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Updated notification
+      403: {description: Not your notification}
+      404: {description: Notification not found}
+    """
     user_id = int(get_jwt_identity())
     note = Notification.query.get_or_404(notification_id)
     if note.user_id != user_id:
@@ -156,6 +255,21 @@ def mark_notification_read(notification_id):
 @balances_bp.route("/api/groups/<int:group_id>/summary", methods=["GET"])
 @jwt_required()
 def get_summary(group_id):
+    """Get group spending summary
+    ---
+    tags: [Balances]
+    summary: Totals, average per participant, per-payer spend, top spender
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: group_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Spending summary
+    """
     group = Group.query.get_or_404(group_id)
     expenses = group.expenses
     members = list(group.members)

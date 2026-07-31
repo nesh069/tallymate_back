@@ -16,6 +16,28 @@ def current_user_id():
 @friends_bp.post("/add")
 @jwt_required()
 def add_friend():
+    """Send a friend request
+    ---
+    tags: [Friends]
+    summary: Send a friend request to a user by email
+    security:
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: {type: string, example: grace@example.com}
+    responses:
+      201:
+        description: Friend request sent
+      400: {description: Missing email or adding yourself}
+      404: {description: User not found}
+      409: {description: Request or friendship already exists}
+    """
     data = request.get_json(silent=True)
     if not isinstance(data, dict) or not str(data.get("email", "")).strip():
         return jsonify(error="email is required."), 400
@@ -38,6 +60,24 @@ def add_friend():
 @friends_bp.post("/accept/<int:request_id>")
 @jwt_required()
 def accept_friend(request_id):
+    """Accept a friend request
+    ---
+    tags: [Friends]
+    summary: Accept a pending request received by the current user
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      200:
+        description: Friend request accepted
+      403: {description: Not your request}
+      404: {description: Request not found}
+      409: {description: Already accepted}
+    """
     contact = db.session.get(FriendContact, request_id)
     if not contact:
         return jsonify(error="Friend request not found."), 404
@@ -53,6 +93,16 @@ def accept_friend(request_id):
 @friends_bp.get("")
 @jwt_required()
 def list_friends():
+    """List friends
+    ---
+    tags: [Friends]
+    summary: List the current user's accepted friends
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: List of friends
+    """
     user_id = current_user_id()
     contacts = db.session.scalars(select(FriendContact).where(FriendContact.status == "accepted", or_(FriendContact.user_id == user_id, FriendContact.friend_id == user_id)).order_by(FriendContact.created_at.desc())).all()
     friends = [contact.friend if contact.user_id == user_id else contact.user for contact in contacts]
@@ -62,6 +112,21 @@ def list_friends():
 @friends_bp.delete("/<int:friend_id>")
 @jwt_required()
 def remove_friend(friend_id):
+    """Remove a friend
+    ---
+    tags: [Friends]
+    summary: Remove an accepted friendship
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: friend_id
+        in: path
+        required: true
+        schema: {type: integer}
+    responses:
+      204: {description: Removed}
+      404: {description: Accepted friendship not found}
+    """
     user_id = current_user_id()
     contact = db.session.scalar(select(FriendContact).where(FriendContact.status == "accepted", or_(and_(FriendContact.user_id == user_id, FriendContact.friend_id == friend_id), and_(FriendContact.user_id == friend_id, FriendContact.friend_id == user_id))))
     if not contact:
@@ -73,6 +138,21 @@ def remove_friend(friend_id):
 @friends_bp.get("/search")
 @jwt_required()
 def search_users():
+    """Search users by email
+    ---
+    tags: [Friends]
+    summary: Search users whose email contains the query (max 10)
+    security:
+      - BearerAuth: []
+    parameters:
+      - name: q
+        in: query
+        required: true
+        schema: {type: string, example: grace}
+    responses:
+      200:
+        description: Matching users
+    """
     q = request.args.get("q", "").strip().lower()
     if not q:
         return jsonify(users=[])

@@ -9,3 +9,4 @@ python-dotenv==1.0.1
 marshmallow==3.21.3
 pytest==8.2.2
 gunicorn==22.0.0
+flasgger==0.9.7.1

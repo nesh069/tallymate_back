@@ -20,7 +20,10 @@ flask --app app run
 
 ## API contract
 
-All request bodies are JSON. Protected endpoints require `Authorization: Bearer <access_token>`. Timestamps are ISO 8601 strings. Errors use `{ "error": "..." }`.
+Interactive API documentation (Swagger UI) is served at `/apidocs` in every
+environment — including the deployed Render service. All request bodies are
+JSON. Protected endpoints require `Authorization: Bearer <access_token>`.
+Timestamps are ISO 8601 strings. Errors use `{ "error": "..." }`.
 
 ### Authentication
 

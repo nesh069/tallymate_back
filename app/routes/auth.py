@@ -15,6 +15,27 @@ def json_body():
 
 @auth_bp.post("/signup")
 def signup():
+    """Sign up a new user
+    ---
+    tags: [Auth]
+    summary: Create an account and get an access token
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, email, password]
+            properties:
+              name: {type: string, example: Ada}
+              email: {type: string, example: ada@example.com}
+              password: {type: string, minLength: 8}
+    responses:
+      201:
+        description: User created with access token
+      400: {description: Missing or invalid fields}
+      409: {description: Email already registered}
+    """
     data = json_body()
     if data is None:
         return jsonify(error="Request body must be a JSON object."), 400
@@ -34,6 +55,25 @@ def signup():
 
 @auth_bp.post("/login")
 def login():
+    """Log in
+    ---
+    tags: [Auth]
+    summary: Exchange credentials for access and refresh tokens
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: {type: string, example: ada@example.com}
+              password: {type: string, example: password123}
+    responses:
+      200:
+        description: User with access and refresh tokens
+      401: {description: Invalid email or password}
+    """
     data = json_body()
     if data is None:
         return jsonify(error="Request body must be a JSON object."), 400
@@ -48,6 +88,17 @@ def login():
 @auth_bp.get("/me")
 @jwt_required()
 def me():
+    """Get current user
+    ---
+    tags: [Auth]
+    summary: Return the authenticated user's profile
+    security:
+      - BearerAuth: []
+    responses:
+      200:
+        description: Current user
+      404: {description: User no longer exists}
+    """
     user = db.session.get(User, int(get_jwt_identity()))
     if not user:
         return jsonify(error="User no longer exists."), 404
