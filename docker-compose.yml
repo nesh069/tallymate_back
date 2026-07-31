@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tallymate
+      POSTGRES_PASSWORD: tallymate_dev_password
+      POSTGRES_DB: tallymate
+    ports:
+      - "5432:5432"
+    volumes:
+      - tallymate_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tallymate"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./tallymate_back
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://tallymate:tallymate_dev_password@db:5432/tallymate
+      SECRET_KEY: dev-secret-change-me
+      JWT_SECRET_KEY: jwt-dev-secret-change-me
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./tallymate_front
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:5000
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  tallymate_db_data:

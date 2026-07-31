@@ -35,70 +35,66 @@ Request body:
   ]
 }
 ```
-- `paid_by` is optional and defaults to the authenticated user.
-- For `unequal`, each participant needs `"amount"`; for `percentage`, each needs `"percentage"`.
 
-Responses: `201` with the created expense, `400` invalid payload/split math, `403` not a
-group member, `404` group not found.
+Response: the created expense including its computed `shares`.
 
-### `GET /api/groups/<group_id>/expenses`
+---
 
-List all expenses for a group, newest first. `200` on success, `403` if not a member.
+## Member 4: Balances & Settlement
 
-### `GET /api/expenses/<expense_id>`
+## Data Models
 
-Get a single expense's details, including its per-user shares. `404` if not found.
+| Model | Table | Key fields | Relationships |
+|---|---|---|---|
+| **User** | `users` | id, name, email, password_hash | belongs to many Groups (via `group_members`); participant in many Expenses (via `expense_shares`) |
+| **Group** | `groups` | id, name, created_by, created_at | has many Members (M2M via `group_members`); has many Expenses; has many Settlements |
+| **Expense** | `expenses` | id, description, amount, paid_by, group_id, date, split_type | belongs to a Group; has many Shares (per-participant amounts) |
+| **Settlement** | `settlements` | id, group_id, payer_id, payee_id, amount, created_at | belongs to a Group; payer and payee reference Users |
+| **Notification** | `notifications` | id, user_id, group_id, message, is_read, created_at | belongs to a User and a Group |
 
-### `PUT /api/expenses/<expense_id>`
+**Expense participant-splitting:** An expense splits its amount across `expense.shares`
+(one share per participant). If no shares are recorded, balances fall back to splitting
+equally across all `group.members`. The payer is always credited the full amount they
+paid, even if they are not listed as a participant (e.g. paying on someone else's behalf).
 
-Edit an expense (full replace — send the complete payload as in `POST`). Only the user
-who paid (`paid_by`) may edit. `403` otherwise, `400` for invalid payloads.
+---
 
-### `GET /api/groups/<group_id>/members`
+## Balances & Settlements — Endpoints
 
-Read-only helper returning `[{"id", "name", "email"}]` for the group's members, used to
-populate the paid-by/split-participant pickers in the Add Expense form. Temporary home
-for this data pending Member 2's Groups feature. `403` if not a member.
+All endpoints require a valid JWT `Authorization: Bearer <token>` header.
 
-### `DELETE /api/expenses/<expense_id>`
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/groups/<group_id>/balances` | Per-user gross balances after settlements |
+| GET | `/api/groups/<group_id>/balances/net` | Balances + minimal payment plan (`simplified_transactions`) |
+| GET | `/api/groups/<group_id>/activity` | Chronological expense + settlement feed |
+| POST | `/api/groups/<group_id>/settlements` | Record a settlement `{payer_id, payee_id, amount}` |
+| GET | `/api/groups/<group_id>/summary` | Totals, per-payer spend, top spender |
+| GET | `/api/notifications` | Current user's notifications |
+| PATCH | `/api/notifications/<id>/read` | Mark a notification read (owner only) |
 
-Delete an expense. Only the user who paid may delete. Returns `204` on success.
-
-### Example expense object
-
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "paid_by": 3,
-  "amount": "90.00",
-  "description": "Dinner",
-  "split_type": "equal",
-  "date": "2026-07-29T12:00:00+00:00",
-  "shares": [
-    {"user_id": 1, "amount": "30.00", "percentage": null},
-    {"user_id": 2, "amount": "30.00", "percentage": null},
-    {"user_id": 3, "amount": "30.00", "percentage": null}
-  ]
-}
-```
-
-## Running tests
+### Example
 
 ```bash
+# Record a settlement (Bob pays Alice $30)
+curl -X POST http://localhost:5000/api/groups/1/settlements \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"payer_id": 2, "payee_id": 1, "amount": 30}'
+```
+
+## Local Development
+
+```bash
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-pytest
+python run.py            # SQLite by default; override with DATABASE_URL
+python -m pytest tests/  # run the test suite
 ```
 
-## Manual testing without real login
-
-Member 1's login/signup flow doesn't exist yet, so to try the Expenses UI/API by hand:
+## Docker
 
 ```bash
-flask --app run.py seed-demo
+docker build -t tallymate-back .
+docker run -p 5000:5000 tallymate-back
 ```
-
-This creates a demo group with 3 members and prints a group ID and a JWT for one of
-them. Use the JWT as a Bearer token (or paste it into the frontend's `localStorage`
-under the `token` key) to authenticate requests.
-## Readme

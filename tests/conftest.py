@@ -1,6 +1,5 @@
 import pytest
 from flask_jwt_extended import create_access_token
-
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
@@ -8,29 +7,29 @@ from app.models.group import Group
 from app.models.user import User
 
 
-@pytest.fixture
-def app():
-    flask_app = create_app(TestConfig)
-    with flask_app.app_context():
-        db.create_all()
-        yield flask_app
-
-
 @pytest.fixture()
 def app():
     application = create_app(TestConfig)
-    with application.app_context():
-        db.drop_all()
-        db.create_all()
+    ctx = application.app_context()
+    ctx.push()
+    db.drop_all()
+    db.create_all()
     yield application
-    with application.app_context():
-        db.session.remove()
-        db.drop_all()
+    db.session.remove()
+    db.drop_all()
+    ctx.pop()
 
 
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def token_headers(app):
+    with app.app_context():
+        token = create_access_token(identity=str(1))
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _make_user(name, email):
@@ -72,6 +71,3 @@ def group_with_members(app):
 
 def auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
-@pytest.fixture()
-def client(app):
-    return app.test_client()
