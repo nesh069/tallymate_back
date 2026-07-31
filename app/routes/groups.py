@@ -142,3 +142,49 @@ def remove_member(group_id, user_id):
     db.session.commit()
 
     return jsonify(group=group.to_dict())
+
+# Delete Group
+ 
+@groups_bp.delete("/<int:group_id>")
+@jwt_required()
+def delete_group(group_id):
+    user = current_user()
+    if not user:
+        return jsonify(error="User not found."), 404
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        return jsonify(error="Group not found."), 404
+
+    if group.created_by != user.id:
+        return jsonify(error="Only the group owner can delete the group."), 403
+
+    db.session.delete(group)
+    db.session.commit()
+
+    return jsonify(message="Group deleted.")
+
+
+# Leave Group
+
+@groups_bp.delete("/<int:group_id>/leave")
+@jwt_required()
+def leave_group(group_id):
+    user = current_user()
+    if not user:
+        return jsonify(error="User not found."), 404
+
+    group = db.session.get(Group, group_id)
+    if not group:
+        return jsonify(error="Group not found."), 404
+
+    if group.created_by == user.id:
+        return jsonify(error="Owner cannot leave the group. Transfer ownership or delete it."), 400
+
+    if user not in group.members:
+        return jsonify(error="You are not a member of this group."), 404
+
+    group.members.remove(user)
+    db.session.commit()
+
+    return jsonify(message="You have left the group.")
