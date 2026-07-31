@@ -1,3 +1,4 @@
+"""WSGI entry point and public application-factory import."""
 from app import create_app
 
 app = create_app()

@@ -14,6 +14,16 @@ def app():
     with flask_app.app_context():
         db.create_all()
         yield flask_app
+
+
+@pytest.fixture()
+def app():
+    application = create_app(TestConfig)
+    with application.app_context():
+        db.drop_all()
+        db.create_all()
+    yield application
+    with application.app_context():
         db.session.remove()
         db.drop_all()
 
@@ -62,3 +72,6 @@ def group_with_members(app):
 
 def auth_headers(token):
     return {"Authorization": f"Bearer {token}"}
+@pytest.fixture()
+def client(app):
+    return app.test_client()

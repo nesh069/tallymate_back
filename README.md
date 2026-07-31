@@ -101,3 +101,4 @@ flask --app run.py seed-demo
 This creates a demo group with 3 members and prints a group ID and a JWT for one of
 them. Use the JWT as a Bearer token (or paste it into the frontend's `localStorage`
 under the `token` key) to authenticate requests.
+## Readme
