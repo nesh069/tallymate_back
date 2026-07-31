@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        run: pytest
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t tallymate-back:ci .
+
+# TODO(deploy): Add a deploy step here (e.g. buildx + push to a container
+# registry, then deploy to DigitalOcean via SSH/droplet or App Platform).
+# Blocked on the team's DigitalOcean payment method being resolved — tracked
+# as a separate todo. Do not ship the deploy step until that is sorted.
