@@ -53,7 +53,12 @@ def create_app(config_object=Config):
     app.register_blueprint(expenses_bp)
     app.register_blueprint(balances_bp)
 
-    swagger = Swagger(app, template=SWAGGER_TEMPLATE)
+    swagger = Swagger(
+        app,
+        template=SWAGGER_TEMPLATE,
+        config={"openapi": "3.0.3"},
+        merge=True,
+    )
 
     @app.get("/health")
     def health():
