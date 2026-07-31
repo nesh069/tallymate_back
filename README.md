@@ -1,3 +1,4 @@
+## README
 # TallyMate Backend
 
 Flask REST API for TallyMate. This section documents the **Expenses** feature (Member 3).
