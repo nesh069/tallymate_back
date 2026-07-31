@@ -174,3 +174,23 @@ python -m pytest tests/  # run the test suite
 docker build -t tallymate-back .
 docker run -p 5000:5000 tallymate-back
 ```
+
+## Deployment (Render)
+
+The backend runs on Render as a plain Python web service (the Docker image is for local
+use; `start.sh` replicates its entrypoint on Render):
+
+1. Create a **Web Service** on Render connected to the `tallymate_back` GitHub repo.
+   Use branch `dev` for testing; switch to `main` once a release branch exists.
+2. Settings:
+   - Runtime: `Python 3`
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `sh start.sh`
+   - Health check path: `/health`
+3. Environment variables:
+   - `DATABASE_URL` — Render Postgres **internal** URL in SQLAlchemy format (e.g. `postgresql://...`)
+   - `JWT_SECRET_KEY` — generate with `openssl rand -hex 32` (never reuse the dev secret)
+4. `start.sh` runs the same schema initialization as `docker-entrypoint.sh`
+   (`db.create_all()`), then starts gunicorn on `$PORT`.
+
+The resulting service URL is the target of the frontend's `/api` proxy in `vercel.json`.
